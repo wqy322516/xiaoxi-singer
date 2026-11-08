@@ -9,6 +9,7 @@ from pathlib import Path
 
 from .config import settings
 from .pipeline import render_cover, render_vocal
+from .song import cover_song as run_cover_song
 
 
 def _bar(stage: str, pct: float) -> None:
@@ -37,6 +38,21 @@ def cmd_cover(args: argparse.Namespace) -> int:
     print(f"\n{out}")
     return 0
 
+
+
+def cmd_song(args: argparse.Namespace) -> int:
+    """Whole song: search -> download -> separate -> convert -> mix."""
+    res = run_cover_song(
+        args.query or args.audio or args.bv or "",
+        args.out,
+        bv=args.bv or None,
+        audio=args.audio or None,
+        up_key=args.up_key,
+        progress=lambda stage, pct: _bar(stage, pct / 100.0),
+    )
+    print(json.dumps(res, ensure_ascii=False, indent=2))
+    print(res['mp3'])
+    return 0
 
 def cmd_info(_: argparse.Namespace) -> int:
     d = Path(settings.model_path).parent
@@ -93,6 +109,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--protect", type=float, default=None)
     s.set_defaults(func=cmd_sing)
 
+    so = sub.add_parser("song", help="whole song: search, download, separate, convert, mix")
+    so.add_argument("query", nargs="?", default="", help="song name, e.g. 周杰伦 晴天")
+    so.add_argument("-o", "--out", required=True, help="output mp3")
+    so.add_argument("--bv", default="", help="Bilibili BV id (skips search)")
+    so.add_argument("--audio", default="", help="local mixed audio (skips search + download)")
+    so.add_argument("--up-key", type=int, default=None, help="semitones; auto +7 for male songs")
+    so.set_defaults(func=cmd_song)
     c = sub.add_parser("cover", help="convert a vocal and mix it with the instrumental")
     c.add_argument("vocal")
     c.add_argument("instrumental")

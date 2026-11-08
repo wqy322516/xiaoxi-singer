@@ -28,6 +28,7 @@ from typing import Any, Callable
 from .config import settings
 from .mix import mix_cover
 from .pipeline import render_cover, render_vocal
+from .song import CoverError, cover_song as _whole_song, pick as _pick, search as _bili_search
 
 SYSTEM_PROMPT = """你是「小汐」，一个会唱歌的 AI，手上有几件真实可用的音频工具。
 
@@ -36,6 +37,7 @@ SYSTEM_PROMPT = """你是「小汐」，一个会唱歌的 AI，手上有几件�
 - 男声（基频中位 < 265Hz）用 up_key=+7 升成女声；女声不要乱升。
 - 音频必须是「干声」；如果用户给的是带伴奏的成品，提醒他先分离人声，不要硬转。
 - 出成品前确认伴奏和干声时长接近。
+- 用户只说歌名（例如「唱一下晴天」）时，用 cover_song 一步做完：搜歌 → 下载 → 分离 → 换音色 → 混音。
 - 做完用一句话汇报：文件在哪、做了什么处理、有什么听感风险（例如升调后高音可能更紧）。
 - 不要编造文件的时长、参数或结果；只报工具返回的数字。
 """
@@ -105,6 +107,36 @@ def _mix(vocal: str, instrumental: str, out: str, target_rms: float = 0.0) -> di
     return {"ok": True, "audio": str(path)}
 
 
+
+def _find_song(query: str, limit: int = 6) -> dict:
+    try:
+        cands = _bili_search(query, limit=limit)
+    except CoverError as exc:
+        return {"ok": False, "error": str(exc)}
+    if not cands:
+        return {"ok": False, "error": f"没搜到「{query}」"}
+    best = _pick(cands, query)
+    return {
+        "ok": True,
+        "best": {k: best[k] for k in ("bv", "title", "author", "secs") if k in best},
+        "candidates": [{k: c[k] for k in ("bv", "title", "author", "secs") if k in c} for c in cands[:5]],
+    }
+
+
+def _cover_song(query: str, out: str, bv: str = "", audio: str = "", up_key: int | None = None) -> dict:
+    try:
+        return _whole_song(
+            query or audio or bv,
+            out,
+            bv=bv or None,
+            audio=audio or None,
+            up_key=up_key,
+        )
+    except CoverError as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+
 TOOLS: list[Tool] = [
     Tool(
         "probe_audio",
@@ -162,6 +194,36 @@ TOOLS: list[Tool] = [
             "required": ["vocal", "instrumental", "out"],
         },
         _mix,
+    ),
+    Tool(
+        "find_song",
+        "在 B站搜一首歌，返回最像官方整首的那条（BV 号、标题、时长、候选列表）。",
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "歌名，可带歌手，例如「林俊杰 美人鱼」"},
+                "limit": {"type": "integer", "description": "返回几条候选，默认 6"},
+            },
+            "required": ["query"],
+        },
+        _find_song,
+    ),
+    Tool(
+        "cover_song",
+        "整首翻唱一步到位：搜歌 → 下载 → MDX 分离人声/伴奏 → 换成小汐音色 → 后期 → 混音，输出 mp3。"
+        "也可以传 audio（本地带伴奏的成品）跳过搜索下载。",
+        {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "歌名；给了 audio 时可留空"},
+                "out": {"type": "string", "description": "输出 mp3 路径"},
+                "bv": {"type": "string", "description": "已知 BV 号时直接指定"},
+                "audio": {"type": "string", "description": "本地音频（带伴奏的成品），跳过搜索下载"},
+                "up_key": {"type": "integer", "description": "半音数；男声歌留空会自动判 +7"},
+            },
+            "required": ["out"],
+        },
+        _cover_song,
     ),
 ]
 

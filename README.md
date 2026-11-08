@@ -1,9 +1,45 @@
 # xiaoxi-singer
 
-**A singing voice you can call.** One `.pth`, three interfaces — CLI, HTTP, and an MCP server that lets an LLM agent sing on request.
+**An agent that sings — not a checkpoint dump.**
+
+Give it a song name and it does the whole job itself: search Bilibili, pick the official
+upload, download the best audio track, separate vocals from the instrumental, convert the
+vocal into a trained voice, post-process it, mix it, and hand back an mp3.
+
+```
+you:  唱一下《小幸运》
+agent: [cover_song]  B站 搜到 4:48 的官方音源 → 分离 → 换声 → 后期 → 混音
+       → runtime/demo_xiaoxingyun.mp3
+        288.7 s · 24 kHz · RMS -14.6 dBFS · 峰值 0.917 · 升调 0 半音
+```
+
+It is not a model release. **No weights ship in this repository** — you bring your own
+RVC `.pth` (yours, or one you trained), drop it in `models/`, and everything else here
+turns that checkpoint into a working singing agent.
+
+![desktop client](assets/screenshots/client.png)
+
+## What is in the box
+
+| Layer | What it does |
+|---|---|
+| **Agent** (`agent.py`) | LLM loop over tools: `find_song` · `cover_song` · `probe_audio` · `convert_vocal` · `render_cover` · `mix_only`. It decides the transposition from measured f0, runs the pipeline, and explains what it did. |
+| **Whole-song pipeline** (`song.py`) | search → download → MDX separation → convert → post → mix, with progress callbacks and resumable steps |
+| **Voice engine** (`engine.py`) | chunked RVC conversion that survives an 8 GB GPU and does not drift, click, or hallucinate on silence |
+| **Post / mix** (`post.py`, `mix.py`) | de-hum, exciter, de-harsh, silence gate, loudness-matched mix with a lookahead limiter |
+| **Interfaces** | CLI, HTTP API, MCP server (so any agent runtime can call it), and a Tk desktop client |
+| **Patches** | `patches/rvc-sweet-zone.patch` — the one upstream change that stops high notes from breaking |
+
+## Quick start
 
 ```bash
-xiaoxi-singer cover my_vocal.wav my_inst.wav -o cover.mp3
+pip install -e ".[song]"          # .[full] adds HTTP + MCP + song extras
+export RVC_ROOT=/path/to/Retrieval-based-Voice-Conversion-WebUI
+export XIAOXI_MODEL=/path/to/your_voice.pth
+
+xiaoxi-singer song "周杰伦 晴天" -o qingtian.mp3      # whole song, no other input
+xiaoxi-singer cover my_vocal.wav my_inst.wav -o cover.mp3   # you already have stems
+xiaoxi-singer agent "把这段干声换成你的音色：/tmp/take.wav"
 ```
 
 ```jsonc
@@ -18,8 +54,6 @@ xiaoxi-singer cover my_vocal.wav my_inst.wav -o cover.mp3
   }
 }
 ```
-
-The agent then has tools: `singer_info`, `start_sing`, `job_status`, `sing_and_wait`, `list_jobs`.
 
 ---
 
