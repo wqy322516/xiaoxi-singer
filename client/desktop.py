@@ -43,6 +43,8 @@ DEFAULT_CFG = {
         "port": 8765,
     },
     "llm": {"base_url": "https://api.deepseek.com/v1", "model": "deepseek-chat", "api_key": ""},
+    "model": "",
+    "rvc_root": "",
     "output_dir": str(Path.home() / "Music" / "XiaoxiSinger"),
 }
 
@@ -206,10 +208,22 @@ class App:
             self.set_status("引擎未启动：解释器路径不对")
             return
         self.set_status(f"正在启动本地引擎…（{Path(py).name}）")
+        env = os.environ.copy()
+        env.setdefault("PYTHONIOENCODING", "utf-8")
+        if self.cfg.get("model"):
+            env["XIAOXI_MODEL"] = str(self.cfg["model"])
+        if self.cfg.get("rvc_root"):
+            env["RVC_ROOT"] = str(self.cfg["rvc_root"])
+        roots = [Path(cwd)] if cwd else []
+        roots += [Path(cwd) / "src"] if cwd else []
+        parts = [str(p) for p in roots if p.is_dir()]
+        if parts:
+            env["PYTHONPATH"] = os.pathsep.join(parts + ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
         try:
             self.backend = subprocess.Popen(
                 [py, "-m", module, "--port", port],
                 cwd=cwd or None,
+                env=env,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -225,6 +239,14 @@ class App:
             time.sleep(0.8)
             if self.health():
                 self.root.after(0, self.mark_online)
+                return
+            if self.backend is not None and self.backend.poll() is not None:
+                code = self.backend.returncode
+                self.root.after(0, lambda c=code: (
+                    self.set_status(f"引擎启动失败（退出码 {c}）"),
+                    self.append("err", "引擎进程退出了。「设置」里确认 Python 解释器装了本包（"
+                                       "pip install -e .），或先在终端手动运行 "
+                                       "python -m xiaoxi_singer.localapp 看报错。\n")))
                 return
         self.root.after(0, lambda: (self.set_status("引擎启动超时，请检查「设置」里的 Python 路径"),
                                     self.append("err", "引擎启动超时。\n")))
@@ -334,6 +356,8 @@ class App:
             ("LLM 接口", "llm.base_url"),
             ("模型名", "llm.model"),
             ("API Key", "llm.api_key"),
+            ("音色模型 .pth", "model"),
+            ("RVC 目录", "rvc_root"),
             ("输出目录", "output_dir"),
         ]
         vars_ = {}

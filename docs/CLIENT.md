@@ -48,6 +48,8 @@ Python 去拉本地引擎；60 秒还连不上就说明解释器或依赖不对�
 | Python 解释器 | 装了 `xiaoxi-singer` 的那个解释器（虚拟环境的 `python.exe`） |
 | 项目目录 | 引擎进程的工作目录（源码运行时填仓库根目录） |
 | LLM 接口 / 模型名 / API Key | 任何 OpenAI 兼容端点；默认 DeepSeek |
+| 音色模型 .pth | 引擎加载的 RVC 权重；留空则用包内默认（`models/`）|
+| RVC 目录 | RVC 仓库路径（`RVC_ROOT`），引擎要在这里找 `infer/` |
 | 输出目录 | 生成文件的默认去处（模型也会参考它） |
 
 保存后会写回 `%APPDATA%\xiaoxi-singer\client.json`（明文，只在本机）。
