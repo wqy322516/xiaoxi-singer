@@ -62,6 +62,14 @@ class RvcEngine:
         self._vc = VC(cfg)
 
     def load(self, model_path: str | Path | None = None) -> None:
+        # the RVC import chdir()s into its checkout; callers expect their cwd back
+        cwd = os.getcwd()
+        try:
+            self._load_locked(model_path)
+        finally:
+            os.chdir(cwd)
+
+    def _load_locked(self, model_path: str | Path | None = None) -> None:
         model = str(model_path or self.s.model_path)
         if not Path(model).is_file():
             raise FileNotFoundError(f"voice model not found: {model}")

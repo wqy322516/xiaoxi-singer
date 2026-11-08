@@ -119,9 +119,13 @@ def check_cover(
     dropped_spans = spans(dropped)
     added_spans = spans(added)
 
-    # pitch: same melody, so semitone distance should stay near zero
-    f_src, v_src = _f0(src)
-    f_conv, v_conv = _f0(conv)
+    # pitch: same melody, so semitone distance should stay near zero.
+    # pyin is the expensive part, so measure it on a 60 s window from the middle third.
+    hop_s = int(SR * 0.3)
+    take = int(SR * 60)
+    start = min(max(0, len(src) // 3), max(0, len(src) - take))
+    f_src, v_src = _f0(src[start : start + take])
+    f_conv, v_conv = _f0(conv[start : start + take])
     m = min(len(f_src), len(f_conv))
     f_src, v_src, f_conv, v_conv = f_src[:m], v_src[:m], f_conv[:m], v_conv[:m]
     both = v_src & v_conv & (f_src > 0) & (f_conv > 0)

@@ -312,8 +312,8 @@ def cover_song(
 
     s = settings or Settings()
     s.ensure_dirs()
-    out_mp3 = Path(out_mp3)
-    work = Path(s.work_dir) / "song"
+    out_mp3 = Path(out_mp3).resolve()
+    work = (Path(s.work_dir) / "song").resolve()
     work.mkdir(parents=True, exist_ok=True)
 
     def step(stage: str, pct: int) -> None:
@@ -354,7 +354,9 @@ def cover_song(
     eng = engine_mod.RvcEngine(s)
     conv = eng.convert(
         voc, work / f"{tag}_conv.wav", up_key=up,
-        progress=lambda _st, pct: step("转换人声", 45 + int(max(0.0, min(1.0, pct)) * 35)),
+        progress=lambda *a: step(
+            "转换人声", 45 + int(max(0.0, min(1.0, (a[0] / a[1]) if len(a) > 1 else 0.0)) * 35)
+        ),
     )
 
     step("后期", 82)
