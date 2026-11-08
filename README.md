@@ -26,9 +26,23 @@ turns that checkpoint into a working singing agent.
 | **Agent** (`agent.py`) | LLM loop over tools: `find_song` · `cover_song` · `probe_audio` · `convert_vocal` · `render_cover` · `mix_only`. It decides the transposition from measured f0, runs the pipeline, and explains what it did. |
 | **Whole-song pipeline** (`song.py`) | search → download → MDX separation → convert → post → mix, with progress callbacks and resumable steps |
 | **Voice engine** (`engine.py`) | chunked RVC conversion that survives an 8 GB GPU and does not drift, click, or hallucinate on silence |
+
+| **QA** (`qa.py`) | after every render it compares the converted vocal with the source: dropped phrases, noise where the singer is silent, pitch drift, brittle top end, clipping — returned as `qa.verdict` / `qa.issues` |
+| **Lyric video** (`video.py`) | cover art + burned subtitles (libass) → mp4; lyrics come from a `.lrc`, NetEase, or ASR, in that order |
 | **Post / mix** (`post.py`, `mix.py`) | de-hum, exciter, de-harsh, silence gate, loudness-matched mix with a lookahead limiter |
 | **Interfaces** | CLI, HTTP API, MCP server (so any agent runtime can call it), and a Tk desktop client |
 | **Patches** | `patches/rvc-sweet-zone.patch` — the one upstream change that stops high notes from breaking |
+
+Every render comes back with a self-check:
+
+```json
+{"verdict": "warn", "pitch_mae_semitones": 0.68,
+ "dropped_spans": [[8.75, 9.25]], "clipping_samples": 0,
+ "issues": ["有 2 段比源人声轻了 35dB 以上：[[8.75, 9.25]]"]}
+```
+
+`warn` means *listen to those timestamps*, not *the render is broken* — see
+[docs/SONG.md](docs/SONG.md) for what each metric means.
 
 ## Quick start
 
@@ -38,6 +52,7 @@ export RVC_ROOT=/path/to/Retrieval-based-Voice-Conversion-WebUI
 export XIAOXI_MODEL=/path/to/your_voice.pth
 
 xiaoxi-singer song "周杰伦 晴天" -o qingtian.mp3      # whole song, no other input
+xiaoxi-singer song "周杰伦 晴天" -o qingtian.mp3 --video   # + lyric mp4
 xiaoxi-singer cover my_vocal.wav my_inst.wav -o cover.mp3   # you already have stems
 xiaoxi-singer agent "把这段干声换成你的音色：/tmp/take.wav"
 ```

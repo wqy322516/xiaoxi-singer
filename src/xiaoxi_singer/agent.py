@@ -38,6 +38,8 @@ SYSTEM_PROMPT = """你是「小汐」，一个会唱歌的 AI，手上有几件�
 - 音频必须是「干声」；如果用户给的是带伴奏的成品，提醒他先分离人声，不要硬转。
 - 出成品前确认伴奏和干声时长接近。
 - 用户只说歌名（例如「唱一下晴天」）时，用 cover_song 一步做完：搜歌 → 下载 → 分离 → 换音色 → 混音。
+- cover_song 的结果里带 qa：verdict 不是 pass 时，把 qa.issues 里的话原样告诉用户，别自己编。
+- 用户要视频时给 cover_song 传 video=true（或对已有 mp3 用 make_video）。
 - 做完用一句话汇报：文件在哪、做了什么处理、有什么听感风险（例如升调后高音可能更紧）。
 - 不要编造文件的时长、参数或结果；只报工具返回的数字。
 """
@@ -123,7 +125,8 @@ def _find_song(query: str, limit: int = 6) -> dict:
     }
 
 
-def _cover_song(query: str, out: str, bv: str = "", audio: str = "", up_key: int | None = None) -> dict:
+def _cover_song(query: str, out: str, bv: str = "", audio: str = "", up_key: int | None = None,
+                video: bool = False, lyrics: str = "") -> dict:
     try:
         return _whole_song(
             query or audio or bv,
@@ -131,8 +134,19 @@ def _cover_song(query: str, out: str, bv: str = "", audio: str = "", up_key: int
             bv=bv or None,
             audio=audio or None,
             up_key=up_key,
+            video=bool(video),
+            lyrics=lyrics or None,
         )
     except CoverError as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def _make_video(audio: str, out: str, cover: str = "", lrc: str = "", title: str = "") -> dict:
+    from .video import make_video
+
+    try:
+        return {"ok": True, **make_video(audio, out, cover=cover or None, lrc=lrc or None, title=title)}
+    except Exception as exc:  # noqa: BLE001
         return {"ok": False, "error": str(exc)}
 
 
@@ -220,10 +234,28 @@ TOOLS: list[Tool] = [
                 "bv": {"type": "string", "description": "已知 BV 号时直接指定"},
                 "audio": {"type": "string", "description": "本地音频（带伴奏的成品），跳过搜索下载"},
                 "up_key": {"type": "integer", "description": "半音数；男声歌留空会自动判 +7"},
+                "video": {"type": "boolean", "description": "顺便渲染带歌词的 mp4（会自动转写歌词）"},
+                "lyrics": {"type": "string", "description": "已有 .lrc 时传路径，省掉转写"},
             },
             "required": ["out"],
         },
         _cover_song,
+    ),
+    Tool(
+        "make_video",
+        "把已经做好的 mp3 渲染成带歌词的 mp4；不给 lrc 就自动转写。",
+        {
+            "type": "object",
+            "properties": {
+                "audio": {"type": "string"},
+                "out": {"type": "string"},
+                "cover": {"type": "string", "description": "封面图，可留空"},
+                "lrc": {"type": "string", "description": "现成的 .lrc，可留空"},
+                "title": {"type": "string", "description": "画面左上角的标题"},
+            },
+            "required": ["audio", "out"],
+        },
+        _make_video,
     ),
 ]
 

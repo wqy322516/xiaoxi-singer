@@ -199,6 +199,17 @@ def download(bv: str, out_wav: Path, *, ffmpeg: str = "ffmpeg", proxy: str | Non
             time.sleep(2)
 
     exe = shutil.which(ffmpeg) or ffmpeg
+    try:  # artwork for the video renderer; failure is not fatal
+        pic = (view.get("data") or {}).get("pic")
+        if pic:
+            art = out_wav.with_suffix(".jpg")
+            with sess.get(pic, stream=True, timeout=60) as r:
+                with open(art, "wb") as f:
+                    for chunk in r.iter_content(1 << 18):
+                        f.write(chunk)
+    except Exception:
+        pass
+
     if subprocess.run([exe, "-v", "error", "-i", str(tmp), "-f", "null", "-"], capture_output=True).returncode != 0:
         tmp.unlink(missing_ok=True)
         raise CoverError("下载的音频不完整，已删除")
@@ -287,6 +298,8 @@ def cover_song(
     up_key: int | None = None,
     progress=None,
     proxy: str | None = None,
+    video: bool = False,
+    lyrics: str | Path | None = None,
 ) -> dict:
     """Search (or take a local mix), separate, convert, post-process, mix.
 
@@ -354,9 +367,13 @@ def cover_song(
     step("混音", 92)
     out_mp3.parent.mkdir(parents=True, exist_ok=True)
     mix_mod.mix_cover(wet, inst, out_mp3, target_rms=0.20, ffmpeg=s.ffmpeg)
-    step("完成", 100)
 
-    return {
+    step("自检", 96)
+    from .qa import check_cover
+
+    qa = check_cover(voc, conv, out_mp3)
+
+    result = {
         "ok": True,
         "title": title,
         "bv": chosen_bv,
@@ -366,4 +383,25 @@ def cover_song(
         "instrumental": str(inst),
         "converted": str(conv),
         "mp3": str(out_mp3),
+        "qa": qa,
     }
+
+    if video:
+        step("渲染歌词视频", 98)
+        from .video import make_video
+
+        art = raw.with_suffix(".jpg")
+        result["video"] = make_video(
+            out_mp3,
+            Path(str(out_mp3).rsplit(".", 1)[0] + ".mp4"),
+            cover=art if art.exists() else None,
+            lrc=lyrics,
+            title=f"{title} · 小汐翻唱",
+            query=title,
+            ffmpeg=s.ffmpeg,
+            work_dir=work / "_video",
+        )
+
+    step("完成", 100)
+    return result
+

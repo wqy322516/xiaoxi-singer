@@ -49,6 +49,8 @@ def cmd_song(args: argparse.Namespace) -> int:
         audio=args.audio or None,
         up_key=args.up_key,
         progress=lambda stage, pct: _bar(stage, pct / 100.0),
+        video=bool(getattr(args, "video", False)),
+        lyrics=getattr(args, "lyrics", "") or None,
     )
     print(json.dumps(res, ensure_ascii=False, indent=2))
     print(res['mp3'])
@@ -115,6 +117,8 @@ def build_parser() -> argparse.ArgumentParser:
     so.add_argument("--bv", default="", help="Bilibili BV id (skips search)")
     so.add_argument("--audio", default="", help="local mixed audio (skips search + download)")
     so.add_argument("--up-key", type=int, default=None, help="semitones; auto +7 for male songs")
+    so.add_argument("--video", action="store_true", help="also render a lyric mp4")
+    so.add_argument("--lyrics", default="", help="existing .lrc; otherwise auto-transcribe")
     so.set_defaults(func=cmd_song)
     c = sub.add_parser("cover", help="convert a vocal and mix it with the instrumental")
     c.add_argument("vocal")
