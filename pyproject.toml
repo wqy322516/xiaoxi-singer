@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xiaoxi-singer"
+version = "0.1.0"
+description = "A callable singing-voice agent: RVC voice conversion + post-processing + mixing, exposed as CLI / HTTP API / MCP server."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "xiaoxi" }]
+keywords = ["voice-conversion", "rvc", "singing", "agent", "mcp", "tts"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Multimedia :: Sound/Audio :: Conversion",
+]
+dependencies = [
+  "numpy>=1.24",
+  "scipy>=1.10",
+  "soundfile>=0.12",
+  "librosa>=0.10",
+]
+
+[project.optional-dependencies]
+server = ["fastapi>=0.110", "uvicorn[standard]>=0.27"]
+mcp = ["mcp>=1.2"]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+xiaoxi-singer = "xiaoxi_singer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"

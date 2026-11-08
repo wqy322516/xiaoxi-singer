@@ -1,0 +1,21 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# runtime output
+runtime/
+out/
+*.part*.wav
+*_raw.wav
+
+# the RVC checkout and the voice itself are not versioned
+vendor/
+models/*.pth
+models/*.index
+assets/demo/*.wav

@@ -1,0 +1,47 @@
+diff --git a/infer/vc/pipeline.py b/infer/vc/pipeline.py
+index 2aa3235..4aa118a 100644
+--- a/infer/vc/pipeline.py
++++ b/infer/vc/pipeline.py
+@@ -127,7 +127,41 @@ class Pipeline(object):
+             f0[uv] = np.interp(np.where(uv)[0], np.where(~uv)[0], f0[~uv])
+         except Exception:
+             traceback.print_exc()
+-        f0 *= pow(2, f0_up_key / 12)
++        # 变调先做：甜区必须作用在「最终听到的音高」上，否则 +12 会把夹逼结果再翻一倍
++        if f0_up_key:
++            f0 = f0 * pow(2, f0_up_key / 12)
++        # 甜区映射：把整条 f0 曲线在 log 域线性映射到 [olo, ohi]（保持起伏形状，压缩跨度）
++        # 环境变量 RVC_SWEET="lo,hi,olo,ohi"（单位 Hz），如 "196,588,250,500"
++        _sweet = os.environ.get("RVC_SWEET", "").strip()
++        if _sweet and len(_sweet.split(",")) == 2:
++            # 甜区夹逼：区内原样，区外软压缩（tanh），只在唱不上去/太低时才动音高
++            try:
++                zlo, zhi = [float(x) for x in _sweet.split(",")]
++                _m = f0 > 0
++                _x = np.log2(np.maximum(f0, 1e-6) / zhi)
++                _up = zhi * np.power(2.0, 0.15 * np.tanh(2.0 * np.maximum(_x, 0.0)))
++                _x2 = np.log2(np.maximum(f0, 1e-6) / zlo)
++                _dn = zlo * np.power(2.0, 0.15 * np.tanh(2.0 * np.minimum(_x2, 0.0)))
++                _out = np.where(f0 > zhi, _up, np.where(f0 < zlo, _dn, f0))
++                f0 = np.where(_m, _out, 0.0).astype(np.float64)
++            except Exception:
++                traceback.print_exc()
++        elif _sweet:
++            try:
++                lo, hi, olo, ohi = [float(x) for x in _sweet.split(",")]
++                _m = f0 > 0
++                _lg = np.log2(np.maximum(f0, 1e-6))
++                _a = (np.log2(ohi) - np.log2(olo)) / max(np.log2(hi) - np.log2(lo), 1e-6)
++                _out = np.log2(olo) + _a * (_lg - np.log2(lo))
++                f0 = np.where(_m, np.power(2.0, _out), 0.0).astype(np.float64)
++            except Exception:
++                traceback.print_exc()
++        # 转音优化：对 f0 曲线做中值平滑（环境变量控制，默认关）
++        _sm = int(os.environ.get("RVC_F0_SMOOTH", "0"))
++        if _sm > 1:
++            from scipy.ndimage import median_filter
++
++            f0 = median_filter(f0, size=_sm, mode="nearest")
+         f0bak = f0.copy()
+         f0_mel = 1127 * np.log(1 + f0 / 700)
+         f0_mel[f0_mel > 0] = (f0_mel[f0_mel > 0] - f0_mel_min) * 254 / (
