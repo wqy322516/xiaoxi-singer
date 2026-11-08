@@ -25,3 +25,6 @@ assets/demo/*.wav
 build/
 dist/
 *.spec
+
+pip-modern-metadata-*/
+*.egg-info/
