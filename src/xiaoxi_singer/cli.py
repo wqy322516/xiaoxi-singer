@@ -69,6 +69,12 @@ def cmd_serve(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_agent(args: argparse.Namespace) -> int:
+    from .agent import cli_main as agent_main
+
+    return agent_main([args.task])
+
+
 def cmd_mcp(_: argparse.Namespace) -> int:
     from .mcp_server import main as mcp_main
 
@@ -106,6 +112,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     m = sub.add_parser("mcp", help="run the MCP server on stdio")
     m.set_defaults(func=cmd_mcp)
+
+    ag = sub.add_parser("agent", help="LLM-driven agent: describe the task in natural language")
+    ag.add_argument("task")
+    ag.set_defaults(func=cmd_agent)
     return p
 
 

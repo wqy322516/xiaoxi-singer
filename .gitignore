@@ -19,3 +19,9 @@ vendor/
 models/*.pth
 models/*.index
 assets/demo/*.wav
+
+# build artifacts
+.buildvenv/
+build/
+dist/
+*.spec

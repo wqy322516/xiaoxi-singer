@@ -116,6 +116,22 @@ curl localhost:8000/v1/jobs/<job_id>
 
 Run `xiaoxi-singer mcp` (stdio). Tool calls return a `job_id` immediately; `sing_and_wait` blocks with a timeout. See [docs/MCP.md](docs/MCP.md) for a worked agent transcript.
 
+## Desktop client
+
+Not everyone wants a terminal. `client/desktop.py` is a ~430-line tkinter chat window: it starts
+the local engine for you (`xiaoxi_singer.localapp`, loopback HTTP) and then just talks to the agent.
+
+![client](assets/screenshots/client.png)
+
+- **Download**: build once with `client/build_client.ps1` → `dist/XiaoxiSinger.exe` (~10 MB, windowed,
+  no runtime bundled — it drives the Python environment you already installed)
+- **Open**: double-click. The header shows `engine online · <model>`; if the engine is down the client
+  starts it with the interpreter from its settings
+- **Ask**: type a task (or attach a vocal / instrumental), watch tool calls stream in, then open the
+  result from the *open output folder* button
+
+See [docs/CLIENT.md](docs/CLIENT.md) for settings, packaging and troubleshooting.
+
 ## Tuning
 
 Everything is an environment variable, so an agent (or you) can override per call.
