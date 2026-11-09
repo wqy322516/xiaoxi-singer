@@ -30,6 +30,7 @@ turns that checkpoint into a working singing agent.
 | **QA** (`qa.py`) | after every render it compares the converted vocal with the source: dropped phrases, noise where the singer is silent, pitch drift, brittle top end, clipping — returned as `qa.verdict` / `qa.issues` |
 | **Lyric video** (`video.py`) | cover art + burned subtitles (libass) → mp4; lyrics come from a `.lrc`, NetEase, or ASR, in that order |
 | **Post / mix** (`post.py`, `mix.py`) | de-hum, exciter, de-harsh, silence gate, loudness-matched mix with a lookahead limiter |
+| **Original songs** | ACE-Step generation → separate → convert → mix (`original.py`, `xiaoxi-singer compose`) |
 | **Interfaces** | CLI, HTTP API, MCP server (so any agent runtime can call it), and a Tk desktop client |
 | **Patches** | `patches/rvc-sweet-zone.patch` — the one upstream change that stops high notes from breaking |
 
@@ -150,6 +151,13 @@ xiaoxi-singer cover vocal.wav inst.wav -o cover.mp3 --target-rms 0.118
 
 # a male song sung by a female voice
 xiaoxi-singer cover male_vocal.wav inst.wav -o cover.mp3 --up-key 7
+
+# one sentence: it finds the song, separates it, sings it, mixes it
+xiaoxi-singer song "小幸运" -o out.mp3 --video
+
+# an original song, in the same voice
+xiaoxi-singer compose "slow piano ballad, rain on a window" \
+    --lyrics lyrics.txt --duration 90 -o song.mp3
 ```
 
 ### HTTP

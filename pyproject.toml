@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "xiaoxi-singer"
-version = "0.3.0"
-description = "A callable singing-voice agent: RVC voice conversion + post-processing + mixing, exposed as CLI / HTTP API / MCP server."
+version = "0.4.0"
+description = "A callable singing-voice agent: RVC covers and ACE-Step original songs, exposed as CLI / HTTP API / MCP server / desktop client."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
