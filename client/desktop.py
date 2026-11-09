@@ -20,7 +20,7 @@ from tkinter import ttk
 import tkinter as tk
 
 APP = "Xiaoxi Singer"
-VER = "0.1.0"
+VER = "0.1.1"
 CFG_DIR = Path(os.environ.get("APPDATA", Path.home())) / "xiaoxi-singer"
 CFG_FILE = CFG_DIR / "client.json"
 
@@ -97,12 +97,18 @@ class App:
     # ------------------------------------------------------------------- ui
     def _build_ui(self) -> None:
         self.root.title(f"{APP} v{VER}")
-        self.root.geometry("1120x840")
-        self.root.minsize(820, 600)
+        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
+        w = min(1160, max(760, int(sw * 0.68)))
+        h = min(880, max(520, int(sh * 0.80)))
+        self.root.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}+{max(0, (sh - h) // 2)}")
+        self.root.minsize(560, 320)
         self.root.configure(bg=BG)
 
+        # 用 grid 固定五个区块的上下顺序：头 / 内容(拉伸) / 附件 / 输入 / 状态
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(1, weight=1)
         head = tk.Frame(self.root, bg=BG2, height=64)
-        head.pack(fill=X)
+        head.grid(row=0, column=0, sticky="ew")
         head.pack_propagate(False)
         tk.Label(head, text="小汐 · 唱歌 Agent", bg=BG2, fg=FG,
                  font=("Microsoft YaHei UI", 14, "bold")).pack(side=LEFT, padx=18)
@@ -115,7 +121,6 @@ class App:
                   font=("Microsoft YaHei UI", 9)).pack(side=RIGHT, padx=6)
 
         body = tk.Frame(self.root, bg=BG)
-        body.pack(fill=BOTH, expand=True, padx=14, pady=(10, 0))
         self.text = tk.Text(body, bg=BG2, fg=FG, bd=0, wrap="word", padx=14, pady=12,
                             font=("Microsoft YaHei UI", 10), insertbackground=FG,
                             spacing1=2, spacing3=4)
@@ -130,7 +135,6 @@ class App:
         self.text.tag_configure("err", foreground=ERR)
 
         attach = tk.Frame(self.root, bg=BG)
-        attach.pack(fill=X, padx=14, pady=(8, 0))
         tk.Button(attach, text="＋ 人声干声", command=lambda: self.pick("vocal"), bg=BG2, fg=FG, bd=0,
                   activebackground="#2a2e38", activeforeground=FG, padx=10, pady=3,
                   font=("Microsoft YaHei UI", 9)).pack(side=LEFT)
@@ -142,11 +146,13 @@ class App:
         self.attach_lbl.pack(side=LEFT, padx=10)
 
         bottom = tk.Frame(self.root, bg=BG)
-        bottom.pack(fill=X, padx=14, pady=10)
         self.entry = tk.Text(bottom, height=3, bg=BG2, fg=FG, bd=0, padx=12, pady=8, wrap="word",
                              font=("Microsoft YaHei UI", 10), insertbackground=FG)
         self.entry.pack(side=LEFT, fill=BOTH, expand=True)
         self.entry.bind("<Control-Return>", lambda e: (self.send(), "break")[1])
+        self.entry.bind("<Return>", lambda e: (self.send(), "break")[1])
+        self.entry.bind("<Shift-Return>", lambda e: None)
+        self.entry.bind("<KP_Enter>", lambda e: (self.send(), "break")[1])
         right = tk.Frame(bottom, bg=BG)
         right.pack(side=RIGHT, padx=(10, 0), fill=Y)
         self.send_btn = tk.Button(right, text="发送\nCtrl+Enter", command=self.send, bg=ACCENT,
@@ -156,8 +162,14 @@ class App:
 
         self.status = tk.Label(self.root, text="就绪", bg=BG, fg=DIM, anchor="w",
                                font=("Microsoft YaHei UI", 9))
-        self.status.pack(fill=X, padx=16, pady=(0, 8))
+        # 顺序很重要：side=bottom 的控件按「先 pack 的贴最底」排列
+        attach.grid(row=2, column=0, sticky="ew", padx=14, pady=(6, 0))
+        bottom.grid(row=3, column=0, sticky="ew", padx=14, pady=(6, 4))
+        self.status.grid(row=4, column=0, sticky="ew", padx=16, pady=(0, 6))
+        body.grid(row=1, column=0, sticky="nsew", padx=14, pady=(10, 0))
         self.append("dim", f"{APP} v{VER} — 用一句话交给它：它会自己选工具、看结果、决定下一步。\n")
+        self.text.bind("<Button-1>", lambda e: self.entry.focus_set())
+        self.root.after(200, self.entry.focus_set)
 
     # --------------------------------------------------------------- helpers
     def append(self, tag: str, msg: str) -> None:
@@ -287,6 +299,7 @@ class App:
         self.append("user", task)
         self.set_status("思考中…")
         self._seen_steps = 0
+        self.entry.focus_set()
         payload = {"task": full, "llm": self.cfg.get("llm") or {}}
         threading.Thread(target=self._post_chat, args=(payload,), daemon=True).start()
 
@@ -407,7 +420,10 @@ def main(argv=None) -> int:
         try:
             import ctypes
 
-            ctypes.windll.shcore.SetProcessDpiAwareness(1)
+            try:
+                ctypes.windll.shcore.SetProcessDpiAwareness(2)  # per-monitor aware
+            except Exception:
+                ctypes.windll.shcore.SetProcessDpiAwareness(1)
         except Exception:
             pass
     root = Tk()

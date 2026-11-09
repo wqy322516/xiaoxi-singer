@@ -73,3 +73,16 @@ python -m venv .buildvenv
 | 发送后立刻报 401/403 | LLM Key 无效或额度用完 |
 | 显示 `CUDA out of memory` | 显存被别的程序占了（TTS、浏览器硬件加速）；关掉再试，或把 RVC 指到 CPU |
 | 中文乱码 | 用发布版 exe；源码运行时确保终端是 UTF-8（`chcp 65001`） |
+
+## 0.1.1 修复：输入框被挤出可视区
+
+在 125%/150% 缩放的高分屏上，旧版把「对话区」先 pack 且 `expand=True`，底部输入条被排到窗口可视范围外——表现就是**打开客户端后人类用户打不了字**（其实输入框在屏幕下方看不见）。
+
+修法：主界面改用 `grid` 固定五行顺序（头 / 对话区(拉伸) / 附件行 / 输入框 / 状态栏），输入框永远贴底可见；同时
+
+- 窗口尺寸按当前屏幕算（`winfo_screenwidth/height`），不再写死 1120×840；
+- `Return` 直接发送、`Shift+Return` 换行（原来只有 Ctrl+Enter）；
+- 启动、发送后自动聚焦输入框，点对话区也会把焦点还给输入框；
+- DPI 改为 per-monitor aware（失败回落 system aware）。
+
+验证方式：真机打一段中文进去 → 回车 → 消息出现在对话区（见 `assets/screenshots/client.png`）。
