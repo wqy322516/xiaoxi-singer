@@ -18,11 +18,13 @@ Any OpenAI-compatible endpoint works (DeepSeek, OpenAI, a local vLLM). Configure
 from __future__ import annotations
 
 import json
+import re
 import os
 import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from .config import settings
@@ -33,6 +35,7 @@ from .song import CoverError, cover_song as _whole_song, pick as _pick, search a
 SYSTEM_PROMPT = """你是「小汐」，一个会唱歌的 AI，手上有几件真实可用的音频工具。
 
 原则：
+- 用户只报了歌名（例如「唱一首小幸运」）就直接用 cover_song，不要去 probe 用户没给过的文件。
 - 先看事实再动手：拿到人声先 probe_audio（时长、基频中位数、有声比例），再决定要不要变调。
 - 男声（基频中位 < 265Hz）用 up_key=+7 升成女声；女声不要乱升。
 - 音频必须是「干声」；如果用户给的是带伴奏的成品，提醒他先分离人声，不要硬转。
@@ -348,6 +351,38 @@ def _chat(cfg: AgentConfig, messages: list[dict[str, Any]], tools: list[dict[str
     raise RuntimeError("unreachable")
 
 
+# ------------------------------------------------------------------ intent
+_COVER_PATTERNS = [
+    r"唱(?:一首|首|一下|一个)?\s*[《<](.+?)[》>]",
+    r"点歌\s*[:：]?\s*(.+)$",
+    r"cover\s*[:：]?\s*(.+)$",
+    r"^\s*(?:小汐[,，]?\s*)?唱(?:一首|首)?\s*(.+)$",
+]
+_NO_COVER = ("原创", "写一首", "写首", "做一首", "作曲", "编曲", "生成一首", "变声", "换声", "转换", "分离")
+
+
+def direct_cover_intent(task: str) -> str | None:
+    """「一句话点一首歌」的确定性路由：命中就把歌名交回去，不经过模型。
+
+    只处理最典型的说法（唱《X》/唱一首X/点歌 X/cover X）；带文件路径、原创、
+    变声之类的任务一律交回给 LLM 决策。
+    """
+    t = (task or "").strip()
+    if not t or any(w in t for w in _NO_COVER):
+        return None
+    if any(ext in t.lower() for ext in (".wav", ".mp3", ".flac", ".m4a", "\\", ":/")):
+        return None
+    for pat in _COVER_PATTERNS:
+        m = re.search(pat, t, flags=re.IGNORECASE)
+        if not m:
+            continue
+        name = m.group(1).strip(" 《》<>，,。.!！?？:：")
+        name = re.sub(r"(吧|好吗|好不好|谢谢|呗|呀|啊)$", "", name).strip()
+        if 1 <= len(name) <= 40:
+            return name
+    return None
+
+
 def run_agent(
     task: str,
     cfg: AgentConfig | None = None,
@@ -363,6 +398,32 @@ def run_agent(
     ]
     schemas = [t.schema() for t in TOOLS]
     steps: list[dict[str, Any]] = []
+
+    song = direct_cover_intent(task)
+    if song:
+        started = time.time()
+        out_dir = Path(cfg.output_dir) if getattr(cfg, "output_dir", None) else Path("runtime")
+        out_mp3 = out_dir / f"cover_{abs(hash(song)) % 10 ** 8}.mp3"
+        out_mp3.parent.mkdir(parents=True, exist_ok=True)
+        result = _cover_song(song, str(out_mp3))
+        steps.append({"tool": "cover_song", "args": {"query": song, "out": str(out_mp3)},
+                      "result": result, "seconds": round(time.time() - started, 2)})
+        if on_step is not None:
+            try:
+                on_step(steps[-1])
+            except Exception:  # noqa: BLE001
+                pass
+        if result.get("ok", True) and result.get("mp3"):
+            qa = result.get("qa") or {}
+            note = ""
+            if qa and qa.get("verdict") != "pass":
+                note = "\n自检提示：" + "；".join(qa.get("issues") or [])
+            return {
+                "ok": True,
+                "answer": f"《{song}》做好了，用的是小汐的音色，文件在 {result['mp3']}。{note}",
+                "steps": steps,
+            }
+        return {"ok": False, "answer": f"《{song}》没做成：{result.get('error', '未知错误')}", "steps": steps}
 
     for _ in range(cfg.max_steps):
         resp = _chat(cfg, messages, schemas)

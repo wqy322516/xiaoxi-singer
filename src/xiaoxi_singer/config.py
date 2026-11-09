@@ -11,6 +11,39 @@ def _env(name: str, default: str) -> str:
     return os.environ.get(name, default)
 
 
+def ensure_ffmpeg_on_path() -> str | None:
+    """让子进程能直接叫到 ``ffmpeg``。
+
+    客户端从资源管理器启动时 PATH 往往不含 ffmpeg；这里按「环境变量 FFMPEG →
+    PATH → 常见安装位置」找一个，找到就把它的目录塞进 PATH，返回可执行文件路径。
+    """
+    import shutil
+
+    cand = os.environ.get("FFMPEG")
+    if cand and Path(cand).is_file():
+        exe = str(Path(cand))
+    else:
+        exe = shutil.which("ffmpeg") or ""
+    if not exe:
+        home = Path(os.environ.get("USERPROFILE") or Path.home())
+        for guess in (
+            home / "dsh" / "home" / "ffmpeg" / "ffmpeg.exe",
+            Path("D:/UserProfile/wqy32/dsh/home/ffmpeg/ffmpeg.exe"),
+            Path("C:/ffmpeg/bin/ffmpeg.exe"),
+            Path("C:/Program Files/ffmpeg/bin/ffmpeg.exe"),
+        ):
+            if guess.is_file():
+                exe = str(guess)
+                break
+    if exe:
+        d = str(Path(exe).parent)
+        if d not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = d + os.pathsep + os.environ.get("PATH", "")
+        os.environ.setdefault("FFMPEG", exe)
+        return exe
+    return None
+
+
 @dataclass
 class Settings:
     """Everything the agent needs to find its pieces.
@@ -23,7 +56,7 @@ class Settings:
     rvc_root: Path = field(default_factory=lambda: Path(_env("RVC_ROOT", "vendor/Retrieval-based-Voice-Conversion-WebUI")))
     model_path: Path = field(default_factory=lambda: Path(_env("XIAOXI_MODEL", "models/xiaoxi_ft_e45_s74565.pth")))
     work_dir: Path = field(default_factory=lambda: Path(_env("XIAOXI_WORK_DIR", "runtime")))
-    ffmpeg: str = field(default_factory=lambda: _env("FFMPEG", "ffmpeg"))
+    ffmpeg: str = field(default_factory=lambda: _env("FFMPEG", ensure_ffmpeg_on_path() or "ffmpeg"))
 
     # conversion defaults (tuned on a 6.6h mixed-language singing corpus)
     f0_method: str = field(default_factory=lambda: _env("RVC_F0_METHOD", "rmvpe"))
