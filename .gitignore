@@ -30,3 +30,9 @@ pip-modern-metadata-*/
 *.egg-info/
 
 .ssh/
+
+# ACE-Step 依赖与权重（约 9 GB，绝不入库）
+orig/pylibs/
+orig/venv/
+orig/*.log
+models/

@@ -56,6 +56,30 @@ def cmd_song(args: argparse.Namespace) -> int:
     print(res['mp3'])
     return 0
 
+
+def cmd_compose(args: argparse.Namespace) -> int:
+    """原创歌曲：文字（可带图）-> ACE-Step -> 分离 -> 换音色 -> 混音。"""
+    from .original import ComposeError, compose
+
+    try:
+        r = compose(
+            args.brief,
+            lyrics=args.lyrics or "",
+            image=args.image or None,
+            duration=float(args.duration),
+            out_dir=args.out_dir or None,
+            seed=args.seed,
+        )
+    except ComposeError as exc:
+        print(f"error: {exc}")
+        return 2
+    print(json.dumps({
+        "final": str(r.final), "song": str(r.song), "seconds": round(r.seconds, 1),
+        "prompt": r.prompt, "image_brief": r.image_brief,
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
 def cmd_info(_: argparse.Namespace) -> int:
     d = Path(settings.model_path).parent
     print(
@@ -128,6 +152,15 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--protect", type=float, default=None)
     c.add_argument("--target-rms", type=float, default=0.0, dest="target_rms")
     c.set_defaults(func=cmd_cover)
+
+    cp = sub.add_parser("compose", help="original song: brief (+ image) -> generated song -> xiaoxi voice")
+    cp.add_argument("brief", help="what the song should be about / sound like")
+    cp.add_argument("--lyrics", default="", help="lyrics text (optional)")
+    cp.add_argument("--image", default="", help="picture that suggests the brief (needs VISION_*)")
+    cp.add_argument("--duration", type=float, default=90.0)
+    cp.add_argument("--seed", type=int, default=None)
+    cp.add_argument("--out-dir", default="")
+    cp.set_defaults(func=cmd_compose)
 
     i = sub.add_parser("info", help="show configuration and available voices")
     i.set_defaults(func=cmd_info)

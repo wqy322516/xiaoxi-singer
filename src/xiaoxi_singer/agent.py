@@ -40,6 +40,7 @@ SYSTEM_PROMPT = """你是「小汐」，一个会唱歌的 AI，手上有几件�
 - 用户只说歌名（例如「唱一下晴天」）时，用 cover_song 一步做完：搜歌 → 下载 → 分离 → 换音色 → 混音。
 - cover_song 的结果里带 qa：verdict 不是 pass 时，把 qa.issues 里的话原样告诉用户，别自己编。
 - 用户要视频时给 cover_song 传 video=true（或对已有 mp3 用 make_video）。
+- 用户要「原创/写一首/按这张图做歌」时用 compose_song；没配多模态模型（VISION_*）时，先请用户用文字描述图片内容。
 - 做完用一句话汇报：文件在哪、做了什么处理、有什么听感风险（例如升调后高音可能更紧）。
 - 不要编造文件的时长、参数或结果；只报工具返回的数字。
 """
@@ -151,6 +152,32 @@ def _make_video(audio: str, out: str, cover: str = "", lrc: str = "", title: str
 
 
 
+def _compose_song(brief: str, lyrics: str = "", image: str = "", duration: float = 90.0,
+                  seed: int | None = None, out_dir: str = "") -> dict[str, Any]:
+    """原创歌曲：ACE-Step 生成 -> 分离 -> 换成小汐音色 -> 混音。"""
+    from .original import ComposeError, compose
+
+    try:
+        r = compose(
+            brief,
+            lyrics=lyrics or "",
+            image=image or None,
+            duration=float(duration or 90.0),
+            seed=seed,
+            out_dir=out_dir or None,
+        )
+    except ComposeError as exc:
+        return {"ok": False, "error": str(exc)}
+    return {
+        "ok": True,
+        "final": str(r.final),
+        "song": str(r.song),
+        "seconds": round(r.seconds, 1),
+        "prompt": r.prompt,
+        "image_brief": r.image_brief,
+    }
+
+
 TOOLS: list[Tool] = [
     Tool(
         "probe_audio",
@@ -256,6 +283,22 @@ TOOLS: list[Tool] = [
             "required": ["audio", "out"],
         },
         _make_video,
+    ),
+    Tool(
+        "compose_song",
+        "做一首原创歌曲：给文字需求（可选图片路径），ACE-Step 生成整首 -> 分离人声 -> 换成小汐音色 -> 混音成 mp3。",
+        {
+            "type": "object",
+            "properties": {
+                "brief": {"type": "string", "description": "想要什么样的歌：主题、风格、情绪、参考曲风"},
+                "lyrics": {"type": "string", "description": "歌词（可选，不给就由模型自己唱）"},
+                "image": {"type": "string", "description": "图片路径（可选，需要多模态模型才能读）"},
+                "duration": {"type": "number", "description": "时长秒数，默认 90，最长约 240"},
+                "seed": {"type": "integer", "description": "随机种子，想复现同一首歌时给固定值"},
+            },
+            "required": ["brief"],
+        },
+        _compose_song,
     ),
 ]
 
